@@ -1,33 +1,28 @@
 pipeline {
-    agent { label "SERVER02" } 
+    agent any
     environment {
-        DOCKER_HUB_USERNAME="devopseasylearning"
-        ALPHA_APPLICATION_01_REPO="alpha-application-01"
-        ALPHA_APPLICATION_02_REPO="alpha-application-02"
+        DOCKER_HUB_USERNAME = "devopseasylearning"
+        ALPHA_APPLICATION_01_REPO = "alpha-application-01"
+        ALPHA_APPLICATION_02_REPO = "alpha-application-02"
         DOCKER_CREDENTIAL_ID = 's8-test-docker-hub-auth'
     }
     parameters {
-        string(name: 'BRANCH_NAME', defaultValue: 'dev', description: 'add branch name')
-        string(name: 'APP1_TAG', defaultValue: 'dev', description: 'add image name')
-        string(name: 'APP2_TAG', defaultValue: 'latest', description: '')
-        string(name: 'PORT_ON_DOCKER_HOST_APP_1', defaultValue: '', description: 'port number')
-        string(name: 'PORT_ON_DOCKER_HOST_APP_2', defaultValue: '', description: 'port number')
+        string(name: 'BRANCH_NAME', defaultValue: 'dev', description: 'Branch name')
+        string(name: 'APP1_TAG', defaultValue: 'dev', description: 'Image name for Application 01')
+        string(name: 'APP2_TAG', defaultValue: 'latest', description: 'Image name for Application 02')
+        string(name: 'PORT_ON_DOCKER_HOST_APP_1', defaultValue: '', description: 'Port number for Application 01')
+        string(name: 'PORT_ON_DOCKER_HOST_APP_2', defaultValue: '', description: 'Port number for Application 02')
     }
     stages {
         stage('Clone Repository') {
             steps {
-                script {
-                        url: 'https://github.com/s8ernest/Ernestsonar.git',
-                        branch: "${params.BRANCH_NAME}"
-                }
+                checkout([$class: 'GitSCM', branches: [[name: "${params.BRANCH_NAME}"]], userRemoteConfigs: [[url: 'https://github.com/s8ernest/Ernestsonar.git']]])
             }
         }
         stage('Checking the code') {
             steps {
                 script {
-                    sh """
-                        ls -l
-                    """ 
+                    sh "ls -l"
                 }
             }
         }
@@ -36,8 +31,8 @@ pipeline {
                 script {
                     sh """
                         docker build -t "${env.DOCKER_HUB_USERNAME}/${env.ALPHA_APPLICATION_01_REPO}:${params.APP1_TAG}" -f application-01.Dockerfile .
-                        docker images |grep ${params.APP1_TAG}
-                    """ 
+                        docker images | grep ${params.APP1_TAG}
+                    """
                 }
             }
         }
@@ -45,42 +40,30 @@ pipeline {
             steps {
                 script {
                     sh """
-                        pwd
-                        ls -l
-                        docker build -t "${env.DOCKER_HUB_USERNAME}"/"${env.ALPHA_APPLICATION_02_REPO}":"${params.APP2_TAG}" -f application-02.Dockerfile .
-                        docker images |grep ${params.APP2_TAG}
-                    """ 
-                }
-            }
-        }
-        stage('Login into') {
-            steps {
-                script {
-                    // Login to Docker Hub
-                    withCredentials([usernamePassword(credentialsId: "s8-test-docker-hub-auth", 
-                    usernameVariable: 'DOCKER_USERNAME', 
-                    passwordVariable: 'DOCKER_PASSWORD')]) {
-                        // Use Docker CLI to login
-                        sh "docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD"
-                    }
-                }
-            }
-        }
-        stage('Pushing application 01 into DockerHub') {
-            steps {
-                script {
-                    sh """
-                        docker push ${env.DOCKER_HUB_USERNAME}/${env.ALPHA_APPLICATION_01_REPO}:${params.APP1_TAG}
+                        docker build -t "${env.DOCKER_HUB_USERNAME}/${env.ALPHA_APPLICATION_02_REPO}:${params.APP2_TAG}" -f application-02.Dockerfile .
+                        docker images | grep ${params.APP2_TAG}
                     """
                 }
             }
         }
-        stage('Pushing application 02 into DockerHub') {
+        stage('Login to Docker Hub') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: "${env.DOCKER_CREDENTIAL_ID}", usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                    sh "docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD"
+                }
+            }
+        }
+        stage('Pushing application 01 to DockerHub') {
             steps {
                 script {
-                    sh """
-                        docker push ${env.DOCKER_HUB_USERNAME}/${env.ALPHA_APPLICATION_02_REPO}:${params.APP2_TAG}
-                    """
+                    sh "docker push ${env.DOCKER_HUB_USERNAME}/${env.ALPHA_APPLICATION_01_REPO}:${params.APP1_TAG}"
+                }
+            }
+        }
+        stage('Pushing application 02 to DockerHub') {
+            steps {
+                script {
+                    sh "docker push ${env.DOCKER_HUB_USERNAME}/${env.ALPHA_APPLICATION_02_REPO}:${params.APP2_TAG}"
                 }
             }
         }
@@ -88,10 +71,10 @@ pipeline {
             steps {
                 script {
                     sh """
-                        docker run -itd -p ${params.PORT_ON_DOCKER_HOST_APP_1}:80  ${env.DOCKER_HUB_USERNAME}/${env.ALPHA_APPLICATION_01_REPO}:${params.APP1_TAG}
+                        docker run -itd -p ${params.PORT_ON_DOCKER_HOST_APP_1}:80 ${env.DOCKER_HUB_USERNAME}/${env.ALPHA_APPLICATION_01_REPO}:${params.APP1_TAG}
                         sleep 5
-                        docker ps 
-                    """ 
+                        docker ps
+                    """
                 }
             }
         }
@@ -99,48 +82,11 @@ pipeline {
             steps {
                 script {
                     sh """
-                        docker run -itd -p ${params.PORT_ON_DOCKER_HOST_APP_2}:80  ${env.DOCKER_HUB_USERNAME}/${env.ALPHA_APPLICATION_02_REPO}:${params.APP2_TAG}
+                        docker run -itd -p ${params.PORT_ON_DOCKER_HOST_APP_2}:80 ${env.DOCKER_HUB_USERNAME}/${env.ALPHA_APPLICATION_02_REPO}:${params.APP2_TAG}
                         sleep 5
-                        docker ps 
-                    """ 
+                        docker ps
+                    """
                 }
-            }
-        }
-    }
-}
-
-
-pipeline {
-    agent {
-        label "master"
-    }
-    stages {
-        stage('Displaying Environment Variables') {
-            steps {
-                echo "The build number is: ${BUILD_NUMBER}"
-                echo "The job name is: ${JOB_NAME}"
-                echo "The Jenkins home directory is: ${JENKINS_HOME}"
-                echo "The Jenkins URL is: ${JENKINS_URL}"
-                echo "The build URL is: ${BUILD_URL}"
-                echo "The job URL is: ${JOB_URL}"
-                echo "The workspace is: ${WORKSPACE}" 
-                echo "BUILD_DISPLAY_NAME: ${BUILD_DISPLAY_NAME}" 
-                // echo "BUILD_TIMESTAMP: ${BUILD_TIMESTAMP}" 
-                echo "JOB_DISPLAY_URL: ${JOB_DISPLAY_URL}" 
-                echo "BUILD_URL_ANCHOR: ${BUILD_URL}/console"  
-                echo "WORKSPACE: ${WORKSPACE}"  
-            }
-        }
-    }
-}
-
-
-pipeline {
-    agent any
-    stages {
-        stage('Build') {
-            steps {
-                sh "printenv"
             }
         }
     }
