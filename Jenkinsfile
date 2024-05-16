@@ -1,5 +1,5 @@
 pipeline {
-    agent any
+    agent { label "SERVER02" } 
     environment {
         DOCKER_HUB_USERNAME="devopseasylearning"
         ALPHA_APPLICATION_01_REPO="alpha-application-01"
